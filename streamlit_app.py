@@ -1,35 +1,42 @@
 import streamlit as st
 import replicate
-import os
 import json
 
 # Set page configuration
 st.set_page_config(page_title="🦙💬 Llama 2 Chatbot")
 
-# Get Replicate API token from Streamlit secrets
+# Get Replicate API token and other parameters from Streamlit secrets
 replicate_api = st.secrets.get("REPLICATE_API_TOKEN")
+model_name = st.secrets.get("MODEL_NAME")
+temperature = float(st.secrets.get("TEMPERATURE", 0.1))
+top_p = float(st.secrets.get("TOP_P", 0.9))
+max_length = int(st.secrets.get("MAX_LENGTH", 120))
 
 if not replicate_api:
     st.error('Replicate API token not found. Please add it to the Streamlit secrets.')
 else:
-    # Set the Replicate API token
-    os.environ['REPLICATE_API_TOKEN'] = replicate_api
-
-    # Define the model and parameters
-    llm = st.secrets.get("MODEL_NAME")
-    temperature = float(st.secrets.get("TEMPERATURE", 0.1))
-    top_p = float(st.secrets.get("TOP_P", 0.9))
-    max_length = int(st.secrets.get("MAX_LENGTH", 120))
-
+    # Initialize Replicate with API token
+    try:
+        replicate.Client(api_token=replicate_api)
+    except Exception as e:
+        st.error(f'Failed to initialize Replicate client: {e}')
+    
     # Load FAQ data from JSON file
-    with open('data.json') as f:
-        faq_data = json.load(f)
+    try:
+        with open('data.json') as f:
+            faq_data = json.load(f)
+    except FileNotFoundError:
+        st.error('data.json file not found. Please ensure the file is in the correct location.')
+        faq_data = {}
+    except json.JSONDecodeError:
+        st.error('Error decoding data.json. Please ensure the file contains valid JSON.')
+        faq_data = {}
 
     # Set app title
     st.title('🦙💬 Llama 2 Chatbot')
 
     # Store LLM generated responses
-    if "messages" not in st.session_state.keys():
+    if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
     # Display or clear chat messages
@@ -54,12 +61,16 @@ else:
                 string_dialogue += "User: " + dict_message["content"] + "\n\n"
             else:
                 string_dialogue += "Assistant: " + dict_message["content"] + "\n\n"
-        output = replicate.run(
-            llm, 
-            input={"prompt": f"{string_dialogue} {prompt_input} Assistant: ",
-                   "temperature": temperature, "top_p": top_p, "max_length": max_length, "repetition_penalty": 1}
-        )
-        return output
+        try:
+            output = replicate.run(
+                model_name, 
+                input={"prompt": f"{string_dialogue} {prompt_input} Assistant: ",
+                       "temperature": temperature, "top_p": top_p, "max_length": max_length, "repetition_penalty": 1}
+            )
+            return output
+        except Exception as e:
+            st.error(f'Error generating response: {e}')
+            return ["Sorry, there was an error processing your request."]
 
     # User-provided prompt
     if prompt := st.chat_input(disabled=not replicate_api):
