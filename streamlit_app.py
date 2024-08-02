@@ -15,13 +15,11 @@ max_length = int(st.secrets.get("MAX_LENGTH", 120))
 if not replicate_api:
     st.error('Replicate API token not found. Please add it to the Streamlit secrets.')
 else:
-    # Initialize Replicate with API token
     try:
         replicate.Client(api_token=replicate_api)
     except Exception as e:
         st.error(f'Failed to initialize Replicate client: {e}')
     
-    # Load FAQ data from JSON file
     try:
         with open('data.json') as f:
             faq_data = json.load(f)
@@ -32,14 +30,11 @@ else:
         st.error('Error decoding data.json. Please ensure the file contains valid JSON.')
         faq_data = {}
 
-    # Set app title
     st.title('🦙💬 Llama 2 Chatbot')
 
-    # Store LLM generated responses
     if "messages" not in st.session_state:
         st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
-    # Display or clear chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
@@ -48,13 +43,10 @@ else:
         st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
     st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 
-    # Function for generating LLaMA2 response
     def generate_llama2_response(prompt_input):
-        # Check if the prompt matches any FAQ
         if prompt_input in faq_data:
             return [faq_data[prompt_input]]
         
-        # If not an FAQ, use the LLM to generate a response
         string_dialogue = "You are a helpful assistant. You do not respond as 'User' or pretend to be 'User'. You only respond once as 'Assistant'."
         for dict_message in st.session_state.messages:
             if dict_message["role"] == "user":
@@ -72,13 +64,11 @@ else:
             st.error(f'Error generating response: {e}')
             return ["Sorry, there was an error processing your request."]
 
-    # User-provided prompt
     if prompt := st.chat_input(disabled=not replicate_api):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
-    # Generate a new response if the last message is not from assistant
     if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
