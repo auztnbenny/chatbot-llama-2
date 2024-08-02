@@ -2,28 +2,24 @@ import streamlit as st
 import replicate
 import os
 import json
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Set page configuration
 st.set_page_config(page_title="🦙💬 Llama 2 Chatbot")
 
-# Get Replicate API token from environment variable
-replicate_api = os.getenv('REPLICATE_API_TOKEN')
+# Get Replicate API token from Streamlit secrets
+replicate_api = st.secrets.get("REPLICATE_API_TOKEN")
 
 if not replicate_api:
-    st.error('Replicate API token not found. Please add it to the .env file.')
+    st.error('Replicate API token not found. Please add it to the Streamlit secrets.')
 else:
     # Set the Replicate API token
     os.environ['REPLICATE_API_TOKEN'] = replicate_api
 
     # Define the model and parameters
-    llm = os.getenv('MODEL_NAME')
-    temperature = float(os.getenv('TEMPERATURE', 0.1))
-    top_p = float(os.getenv('TOP_P', 0.9))
-    max_length = int(os.getenv('MAX_LENGTH', 120))
+    llm = st.secrets.get("MODEL_NAME")
+    temperature = float(st.secrets.get("TEMPERATURE", 0.1))
+    top_p = float(st.secrets.get("TOP_P", 0.9))
+    max_length = int(st.secrets.get("MAX_LENGTH", 120))
 
     # Load FAQ data from JSON file
     with open('data.json') as f:
