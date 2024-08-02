@@ -3,84 +3,84 @@ import replicate
 import os
 import json
 
-# App title
+# Set page configuration
 st.set_page_config(page_title="🦙💬 Llama 2 Chatbot")
 
-# Replicate Credentials
-with st.sidebar:
-    st.title('🦙💬 Llama 2 Chatbot')
-    st.write('This chatbot is created using the open-source Llama 2 LLM model from Meta.')
-    
-    if 'REPLICATE_API_TOKEN' in st.secrets:
-        st.success('API key already provided!', icon='✅')
-        replicate_api = st.secrets['REPLICATE_API_TOKEN']
-    else:
-        replicate_api = st.text_input('Enter Replicate API token:', type='password')
-        if not (replicate_api.startswith('r8_') and len(replicate_api)==40):
-            st.warning('Please enter your credentials!', icon='⚠️')
-        else:
-            st.success('Proceed to entering your prompt message!', icon='👉')
-    
+# Get Replicate API token from Streamlit secrets
+replicate_api = st.secrets.get("REPLICATE_API_TOKEN")
+
+if not replicate_api:
+    st.error('Replicate API token not found. Please add it to the Streamlit secrets.')
+else:
+    # Set the Replicate API token
     os.environ['REPLICATE_API_TOKEN'] = replicate_api
 
-    st.subheader('Models')
-    selected_model = st.sidebar.selectbox('Choose a Llama2 model', ['Llama2-7B', 'Llama2-13B'], key='selected_model')
-    if selected_model == 'Llama2-7B':
-        llm = 'a16z-infra/llama7b-v2-chat:4f0a4744c7295c024a1de15e1a63c880d3da035fa1f49bfd344fe076074c8eea'
-    elif selected_model == 'Llama2-13B':
-        llm = 'a16z-infra/llama13b-v2-chat:df7690f1994d94e96ad9d568eac121aecf50684a0b0963b25a41cc40061269e5'
+    # Define the model and parameters
+    llm = st.secrets.get("MODEL_NAME")
+    temperature = float(st.secrets.get("TEMPERATURE", 0.1))
+    top_p = float(st.secrets.get("TOP_P", 0.9))
+    max_length = int(st.secrets.get("MAX_LENGTH", 120))
 
-# Load FAQ data from JSON file
-with open('data.json') as f:
-    faq_data = json.load(f)
+    # Load FAQ data from JSON file
+    with open('data.json') as f:
+        faq_data = json.load(f)
 
-# Store LLM generated responses
-if "messages" not in st.session_state.keys():
-    st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
+    # Set app title
+    st.title('🦙💬 Llama 2 Chatbot')
 
-# Display or clear chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+    # Store LLM generated responses
+    if "messages" not in st.session_state.keys():
+        st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
 
-def clear_chat_history():
-    st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
-st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
+    # Display or clear chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
 
-# Function for generating LLaMA2 response
-def generate_llama2_response(prompt_input):
-    string_dialogue = "You are a helpful assistant. You do not respond as 'User' or pretend to be 'User'. You only respond once as 'Assistant'."
-    for dict_message in st.session_state.messages:
-        if dict_message["role"] == "user":
-            string_dialogue += "User: " + dict_message["content"] + "\n\n"
-        else:
-            string_dialogue += "Assistant: " + dict_message["content"] + "\n\n"
-    output = replicate.run(llm, 
-                           input={"prompt": f"{string_dialogue} {prompt_input} Assistant: ",
-                                  "temperature": 0.1, "top_p": 0.9, "max_length": 120, "repetition_penalty": 1})
-    return output
+    def clear_chat_history():
+        st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
+    st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 
-# User-provided prompt
-if prompt := st.chat_input(disabled=not replicate_api):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.write(prompt)
+    # Function for generating LLaMA2 response
+    def generate_llama2_response(prompt_input):
+        # Check if the prompt matches any FAQ
+        if prompt_input in faq_data:
+            return faq_data[prompt_input]
+        
+        # If not an FAQ, use the LLM to generate a response
+        string_dialogue = "You are a helpful assistant. You do not respond as 'User' or pretend to be 'User'. You only respond once as 'Assistant'."
+        for dict_message in st.session_state.messages:
+            if dict_message["role"] == "user":
+                string_dialogue += "User: " + dict_message["content"] + "\n\n"
+            else:
+                string_dialogue += "Assistant: " + dict_message["content"] + "\n\n"
+        output = replicate.run(
+            llm, 
+            input={"prompt": f"{string_dialogue} {prompt_input} Assistant: ",
+                   "temperature": temperature, "top_p": top_p, "max_length": max_length, "repetition_penalty": 1}
+        )
+        return output
 
-    # Check if the prompt matches any FAQ
-    if prompt in faq_data:
-        response = faq_data[prompt]
-    else:
-        # Generate a new response if the last message is not from assistant
+    # User-provided prompt
+    if prompt := st.chat_input(disabled=not replicate_api):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
+        # Generate a new response if last message is not from assistant
         if st.session_state.messages[-1]["role"] != "assistant":
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
-                    response = generate_llama2_response(prompt)
-                    placeholder = st.empty()
-                    full_response = ''
-                    for item in response:
-                        full_response += item
-                        placeholder.markdown(full_response)
-                    placeholder.markdown(full_response)
-        
-        message = {"role": "assistant", "content": full_response}
-        st.session_state.messages.append(message)
+                    if prompt in faq_data:
+                        response = faq_data[prompt]
+                        st.write(response)
+                    else:
+                        response = generate_llama2_response(prompt)
+                        placeholder = st.empty()
+                        full_response = ''
+                        for item in response:
+                            full_response += item
+                            placeholder.markdown(full_response)
+                        st.write(full_response)
+            message = {"role": "assistant", "content": full_response}
+            st.session_state.messages.append(message)
